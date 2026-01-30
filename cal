@@ -1,0 +1,1097 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>물타기 계산기 V2.0</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: { darkbg: '#0f172a', darkcard: '#1e293b' },
+                    zIndex: { '60': '60', '70': '70', 'nav': '51' }
+                }
+            }
+        }
+    </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.8/dist/web/static/pretendard.css" />
+
+    <style>
+        body { font-family: 'Pretendard', sans-serif; background-color: #f8fafc; -webkit-tap-highlight-color: transparent; user-select: none; }
+        .app-screen { max-width: 480px; margin: 0 auto; background-color: #ffffff; height: 100vh; position: relative; overflow: hidden; display: flex; flex-direction: column; padding-top: env(safe-area-inset-top); }
+        .dark .app-screen { background-color: #0f172a; }
+        .tab-content { display: none; flex: 1; overflow-y: auto; padding-bottom: 80px; }
+        .tab-content.active { display: block; animation: fadeIn 0.2s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        #view-calculator { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: white; z-index: 50; transform: translateX(100%); transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1); max-width: 480px; margin: 0 auto; display: flex; flex-direction: column; padding-top: env(safe-area-inset-top); padding-bottom: 80px; }
+        .dark #view-calculator { background: #0f172a; }
+        #view-calculator.open { transform: translateX(0); }
+        input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 24px; width: 24px; border-radius: 50%; background: #ffffff; border: 2px solid #3b82f6; cursor: pointer; margin-top: -8px; box-shadow: 0 1px 3px rgba(0,0,0,0.15); }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 8px; background: #bfdbfe; border-radius: 4px; }
+        .dark input[type=range]::-webkit-slider-runnable-track { background: #334155; }
+        .glass-nav { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); border-top: 1px solid rgba(0,0,0,0.05); }
+        .dark .glass-nav { background: rgba(15, 23, 42, 0.9); border-top: 1px solid rgba(255,255,255,0.05); }
+        .nav-btn.active { color: #2563eb; } .dark .nav-btn.active { color: #60a5fa; }
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+        .chart-marker { transition: bottom 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94); }
+        .label-box { transition: transform 0.3s ease-out; }
+        #track-fill { transition: height 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94); }
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); backdrop-filter: blur(2px); z-index: 60; display: none; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.2s; }
+        .modal-overlay.open { display: flex; opacity: 1; }
+        .modal-content { background: white; width: 90%; max-width: 320px; border-radius: 20px; padding: 24px; transform: scale(0.95); transition: transform 0.2s; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+        .dark .modal-content { background: #1e293b; color: white; }
+        .modal-overlay.open .modal-content { transform: scale(1); }
+
+        /* [Fixed] Root Font Scaling for Large Text Mode */
+        html { font-size: 16px; transition: font-size 0.2s; }
+        html.large-text { font-size: 20px !important; } /* Increases 1rem from 16px to 20px */
+    </style>
+</head>
+<body class="transition-colors duration-300">
+
+<div class="app-screen" id="app-container">
+    
+    <!-- Toast -->
+    <div id="toast-container" class="fixed bottom-24 left-1/2 -translate-x-1/2 z-[70] pointer-events-none opacity-0 transition-opacity duration-300">
+        <div class="bg-slate-800/90 dark:bg-white/90 backdrop-blur text-white dark:text-slate-900 px-5 py-3 rounded-full shadow-lg font-bold text-sm flex items-center gap-2">
+            <i class="fa-solid fa-check"></i> <span id="toast-msg">알림</span>
+        </div>
+    </div>
+
+    <!-- Modals (Init Holdings) -->
+    <div id="modal-init-holdings" class="modal-overlay z-[60]">
+        <div class="modal-content">
+            <div class="text-center mb-5">
+                <div class="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center mx-auto mb-3 text-blue-500"><i class="fa-solid fa-wallet text-xl"></i></div>
+                <h3 class="text-lg font-bold text-slate-800 dark:text-white mb-1">보유 현황 입력</h3>
+                <p class="text-xs text-slate-400">평단가와 수량을 입력해주세요.</p>
+            </div>
+            <div class="space-y-3 mb-6">
+                <div><label class="block text-xs font-bold text-slate-500 mb-1">평단가</label><input type="number" id="init-input-price" class="w-full bg-slate-50 dark:bg-slate-700 dark:text-white border border-slate-200 dark:border-slate-600 rounded-xl px-3 py-2.5 font-bold text-right text-lg outline-none"></div>
+                <div><label class="block text-xs font-bold text-slate-500 mb-1">보유수량</label><input type="number" id="init-input-qty" class="w-full bg-slate-50 dark:bg-slate-700 dark:text-white border border-slate-200 dark:border-slate-600 rounded-xl px-3 py-2.5 font-bold text-right text-lg outline-none" placeholder="0"></div>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+                <button onclick="closeInitModal()" class="py-3 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-500 font-bold text-sm">건너뛰기</button>
+                <button onclick="confirmInitHoldings()" class="py-3 rounded-xl bg-blue-600 text-white font-bold text-sm">입력 완료</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- [NEW] Modals (Confirm Save) -->
+    <div id="modal-confirm-save" class="modal-overlay z-[80]">
+        <div class="modal-content text-center">
+            <h3 class="text-lg font-bold text-slate-800 dark:text-white mb-2">변경사항 저장</h3>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mb-6">수정된 내용이 있습니다.<br>저장하고 나가시겠습니까?</p>
+            <div class="grid grid-cols-2 gap-3">
+                <button onclick="confirmDiscardAndExit()" class="py-3 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300 font-bold text-sm hover:bg-slate-200 dark:hover:bg-slate-600">아니요</button>
+                <button onclick="confirmSaveAndExit()" class="py-3 rounded-xl bg-blue-600 text-white font-bold text-sm hover:bg-blue-700 shadow-md shadow-blue-200 dark:shadow-none">네</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals (Edit Portfolio) -->
+    <div id="modal-edit-portfolio" class="modal-overlay">
+        <div class="modal-content">
+            <h3 class="text-lg font-bold text-slate-800 dark:text-white mb-1" id="edit-modal-title">종목 수정</h3>
+            <p class="text-xs text-slate-400 mb-5">보유 정보를 수정합니다.</p>
+            <div class="space-y-4">
+                <div><label class="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">평단가</label><input type="number" id="edit-input-price" class="w-full bg-slate-50 dark:bg-slate-700 dark:text-white border border-slate-200 dark:border-slate-600 rounded-xl px-3 py-2 font-bold text-slate-800 outline-none focus:border-blue-500 text-right"></div>
+                <div><label class="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">보유수량</label><input type="number" id="edit-input-qty" class="w-full bg-slate-50 dark:bg-slate-700 dark:text-white border border-slate-200 dark:border-slate-600 rounded-xl px-3 py-2 font-bold text-slate-800 outline-none focus:border-blue-500 text-right"></div>
+            </div>
+            <div class="grid grid-cols-2 gap-3 mt-6">
+                <button onclick="closeEditModal()" class="py-3 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300 font-bold text-sm hover:bg-slate-200 dark:hover:bg-slate-600">취소</button>
+                <button onclick="saveEditModal()" class="py-3 rounded-xl bg-blue-600 text-white font-bold text-sm hover:bg-blue-700 shadow-md shadow-blue-200 dark:shadow-none">저장하기</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals (Delete) -->
+    <div id="modal-delete-portfolio" class="modal-overlay">
+        <div class="modal-content">
+            <div class="text-center mb-6">
+                <div class="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center mx-auto mb-4 text-red-500"><i class="fa-solid fa-trash-can text-xl"></i></div>
+                <h3 class="text-lg font-bold text-slate-800 dark:text-white mb-1">삭제하시겠습니까?</h3>
+                <p class="text-xs text-slate-400">포트폴리오에서 <span id="delete-modal-name" class="font-bold text-slate-600 dark:text-slate-300">종목명</span>을<br>영구적으로 제거합니다.</p>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+                <button onclick="closeDeleteModal()" class="py-3 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300 font-bold text-sm hover:bg-slate-200 dark:hover:bg-slate-600">취소</button>
+                <button onclick="confirmDelete()" class="py-3 rounded-xl bg-red-500 text-white font-bold text-sm hover:bg-red-600 shadow-md shadow-red-200 dark:shadow-none">삭제</button>
+            </div>
+        </div>
+    </div>
+
+     <!-- Modals (Import Data) -->
+     <div id="modal-import-data" class="modal-overlay">
+        <div class="modal-content">
+            <h3 class="text-lg font-bold text-slate-800 dark:text-white mb-1">데이터 불러오기</h3>
+            <p class="text-xs text-slate-400 mb-4">백업해둔 텍스트를 아래에 붙여넣으세요.<br><span class="text-red-500">주의: 기존 데이터는 삭제됩니다.</span></p>
+            <textarea id="import-input-text" class="w-full h-32 bg-slate-50 dark:bg-slate-700 dark:text-white border border-slate-200 dark:border-slate-600 rounded-xl px-3 py-2 text-xs font-mono outline-none focus:border-blue-500 resize-none mb-4" placeholder='[{"name":"삼성전자"...}]'></textarea>
+            <div class="grid grid-cols-2 gap-3">
+                <button onclick="closeImportModal()" class="py-3 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300 font-bold text-sm hover:bg-slate-200 dark:hover:bg-slate-600">취소</button>
+                <button onclick="confirmImport()" class="py-3 rounded-xl bg-blue-600 text-white font-bold text-sm hover:bg-blue-700 shadow-md shadow-blue-200 dark:shadow-none">복구하기</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- View 1: Home -->
+    <div id="tab-home" class="tab-content active">
+        <header class="pt-8 pb-4 px-6 sticky top-0 bg-white/95 dark:bg-[#0f172a]/95 backdrop-blur-sm z-10">
+            <h1 class="text-2xl font-extrabold text-slate-800 dark:text-white leading-tight">
+                어디에<br><span class="text-blue-600 dark:text-blue-400">물</span>을 줘볼까?
+            </h1>
+        </header>
+        <div class="px-5 mt-2">
+            <div class="relative group">
+                <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                <input type="text" id="input-search" placeholder="종목명, 코드, 심볼 검색" class="w-full bg-slate-100 dark:bg-slate-800 rounded-2xl py-4 pl-12 pr-10 text-slate-800 dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all">
+                <button id="btn-clear-search" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hidden p-1"><i class="fa-solid fa-circle-xmark text-lg"></i></button>
+            </div>
+            <div class="mt-8">
+                <div class="flex justify-between items-center mb-3 px-1"><p class="text-xs font-bold text-slate-400" id="list-title">최근 조회</p><button onclick="clearRecent()" class="text-[10px] text-slate-400 hover:text-red-500">기록 삭제</button></div>
+                <div id="stock-list" class="space-y-3 pb-20"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- View 2: Portfolio -->
+    <div id="tab-portfolio" class="tab-content">
+        <header class="pt-8 pb-4 px-6 bg-white dark:bg-[#0f172a] sticky top-0 z-10"><h1 class="text-2xl font-extrabold text-slate-800 dark:text-white">내 포트폴리오</h1></header>
+        <div class="px-5 mt-2 space-y-4">
+            <!-- Total Investment Card -->
+            <div id="pf-summary-card" class="bg-slate-900 dark:bg-slate-800 rounded-3xl p-7 text-white shadow-xl relative overflow-hidden hidden">
+                <div class="absolute top-0 right-0 w-48 h-48 bg-blue-500 rounded-full blur-3xl opacity-10 -mr-16 -mt-16"></div>
+                <div class="relative z-10">
+                    <p class="text-slate-400 text-sm font-medium mb-1">총 투자 금액</p>
+                    <h2 class="text-4xl font-extrabold tracking-tight mb-4"><span id="pf-total-invest">0</span><span class="text-xl font-normal text-slate-400 ml-1">원</span></h2>
+                    <div class="flex items-center gap-2 border-t border-white/10 pt-4">
+                        <i class="fa-solid fa-layer-group text-slate-400 text-xs"></i>
+                        <span class="text-slate-300 text-xs">보유 종목 <span id="pf-count" class="font-bold text-white">0</span>개</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- List -->
+            <div>
+                <div class="flex justify-between items-end px-1 mb-2">
+                    <h3 class="text-sm font-bold text-slate-600 dark:text-slate-400">보유 종목</h3>
+                    <p class="text-[10px] text-slate-400 opacity-60"><i class="fa-solid fa-arrow-left"></i> 삭제 &nbsp; | &nbsp; 수정 <i class="fa-solid fa-arrow-right"></i></p>
+                </div>
+                <div id="pf-list" class="space-y-3 pb-10 min-h-[200px]"></div>
+                <div id="pf-empty" class="hidden text-center text-slate-400 text-sm py-10">저장된 종목이 없습니다.</div>
+            </div>
+            
+            <button onclick="switchTab('home')" class="w-full py-4 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700 text-slate-400 font-bold hover:border-slate-300 dark:hover:border-slate-600 hover:text-slate-500 dark:hover:text-slate-300 transition">
+                + 새 종목 검색해서 추가하기
+            </button>
+        </div>
+    </div>
+
+    <!-- View 3: Settings -->
+    <div id="tab-settings" class="tab-content">
+        <header class="pt-8 pb-4 px-6 bg-white dark:bg-[#0f172a] sticky top-0 z-10"><h1 class="text-2xl font-extrabold text-slate-800 dark:text-white">설정</h1></header>
+        <div class="px-5 mt-2 space-y-3">
+            <div class="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-slate-100 dark:border-slate-700 flex justify-between items-center" onclick="toggleDarkMode()">
+                <span class="font-medium text-slate-700 dark:text-slate-200">다크 모드</span>
+                <div class="w-10 h-6 bg-slate-200 dark:bg-blue-600 rounded-full relative"><div class="absolute left-1 top-1 w-4 h-4 bg-white rounded-full transition-transform dark:translate-x-4"></div></div>
+            </div>
+            
+            <!-- Large Text Mode -->
+            <div class="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-slate-100 dark:border-slate-700 flex justify-between items-center" onclick="toggleLargeText()">
+                <span class="font-medium text-slate-700 dark:text-slate-200">큰 글씨 모드</span>
+                <div id="btn-text-toggle" class="w-10 h-6 bg-slate-200 dark:bg-slate-600 rounded-full relative transition-colors duration-200">
+                    <div id="knob-text-toggle" class="absolute left-1 top-1 w-4 h-4 bg-white rounded-full shadow-sm transition-transform duration-200"></div>
+                </div>
+            </div>
+
+            <!-- Data Management -->
+            <div class="mt-6">
+                <p class="text-xs font-bold text-slate-400 mb-2 px-1">데이터 관리</p>
+                <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 divide-y divide-slate-50 dark:divide-slate-700 overflow-hidden">
+                    <div class="p-4 flex justify-between items-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition" onclick="exportData()">
+                        <div class="flex items-center gap-3"><div class="w-8 h-8 rounded-full bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center text-blue-500"><i class="fa-solid fa-download"></i></div><div class="text-left"><span class="font-bold text-slate-700 dark:text-slate-200 text-sm block">데이터 내보내기</span><span class="text-[10px] text-slate-400 block">복사된 텍스트를 저장하세요</span></div></div><i class="fa-solid fa-chevron-right text-slate-300 text-sm"></i>
+                    </div>
+                    <div class="p-4 flex justify-between items-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700 transition" onclick="openImportModal()">
+                        <div class="flex items-center gap-3"><div class="w-8 h-8 rounded-full bg-purple-50 dark:bg-purple-900/30 flex items-center justify-center text-purple-500"><i class="fa-solid fa-upload"></i></div><div class="text-left"><span class="font-bold text-slate-700 dark:text-slate-200 text-sm block">데이터 불러오기</span><span class="text-[10px] text-slate-400 block">복사한 텍스트로 복구</span></div></div><i class="fa-solid fa-chevron-right text-slate-300 text-sm"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="text-center text-xs text-slate-400 mt-10">Water Calculator V6.7 (Font Fix)</div>
+        </div>
+    </div>
+
+    <!-- View Calculator -->
+    <div id="view-calculator">
+        <div class="flex-none h-14 bg-white/95 dark:bg-[#0f172a]/95 backdrop-blur z-20 px-4 flex items-center justify-between border-b border-slate-100 dark:border-slate-800">
+            <button onclick="handleBackNavigation()" class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 active:scale-95 transition"><i class="fa-solid fa-arrow-left text-lg text-slate-600 dark:text-slate-300"></i></button>
+            <div class="text-center"><h2 class="font-bold text-lg text-slate-800 dark:text-white leading-none" id="calc-title">종목명</h2><p class="text-[10px] text-slate-400 mt-0.5" id="calc-code">CODE</p></div>
+            <button onclick="saveToPortfolio()" class="w-10 h-10 flex items-center justify-center rounded-full text-slate-300 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-800 active:scale-95 transition"><i class="fa-solid fa-folder-plus text-xl"></i></button>
+        </div>
+
+        <div class="flex-1 overflow-y-auto bg-slate-50 dark:bg-[#0f172a] flex flex-col">
+            <!-- Graph Area -->
+            <div class="bg-white dark:bg-slate-800 pt-6 pb-2 border-b border-slate-100 dark:border-slate-700 relative overflow-hidden flex-none">
+                <div class="relative h-[20vh] min-h-[180px] max-h-[300px] w-full select-none pt-2 pb-6 px-6">
+                    <!-- Track -->
+                    <div class="absolute top-4 bottom-8 left-8 w-3 bg-slate-100 dark:bg-slate-700/50 rounded-full z-0">
+                        <div id="track-fill" class="absolute bottom-0 left-0 right-0 bg-blue-100 dark:bg-blue-900/30 rounded-b-full rounded-t-sm transition-all duration-300 ease-out" style="height: 0%"></div>
+                    </div>
+                    <!-- Markers -->
+                    <div id="chart-markers" class="absolute inset-0 top-4 bottom-8 z-10 pointer-events-none">
+                        
+                        <!-- My Price (Right, Gray) -->
+                        <div id="marker-my" class="chart-marker absolute left-[38px] right-0 flex items-center transform translate-y-1/2 z-10 opacity-0" style="bottom: 0%;">
+                             <div class="w-full h-px bg-slate-300 dark:bg-slate-600 border-t border-dashed border-slate-400 opacity-50"></div>
+                             <div class="label-box bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 px-2 py-1 rounded-l-lg shadow-sm flex items-center gap-2 absolute right-0">
+                                <span class="text-[10px] text-slate-400 font-bold">내평단</span>
+                                <span id="label-my-chart" class="text-xs font-bold text-slate-600 dark:text-slate-300 font-mono">0</span>
+                             </div>
+                        </div>
+
+                        <!-- Buy Price (Right, Orange) -->
+                        <div id="marker-buy" class="chart-marker absolute left-[38px] right-0 flex items-center transform translate-y-1/2 z-15 opacity-0" style="bottom: 0%;">
+                             <div class="w-full h-px bg-orange-300 dark:bg-orange-700 border-t border-dashed border-orange-400 opacity-60"></div>
+                             <div class="label-box bg-orange-50 dark:bg-orange-900/40 border border-orange-200 dark:border-orange-700 px-2 py-1 rounded-l-lg shadow-sm flex items-center gap-2 absolute right-0">
+                                <span class="text-[10px] text-orange-500 font-bold">추매가</span>
+                                <span id="label-buy-chart" class="text-xs font-bold text-orange-600 dark:text-orange-400 font-mono">0</span>
+                             </div>
+                        </div>
+
+                        <!-- Current Price (Right, Blue) -->
+                        <div id="marker-cur" class="chart-marker absolute left-[38px] right-0 flex items-center transform translate-y-1/2 z-20 opacity-0" style="bottom: 0%;">
+                             <div class="w-full h-px bg-blue-300 dark:bg-blue-700 border-t border-dashed border-blue-400 opacity-50"></div>
+                             <div class="label-box bg-blue-50 dark:bg-blue-900/40 border border-blue-100 dark:border-blue-700 px-2 py-1 rounded-l-lg shadow-sm flex items-center gap-2 absolute right-0">
+                                <span class="text-[10px] text-blue-500 font-bold">현재가</span>
+                                <span id="label-cur-chart" class="text-xs font-bold text-blue-600 dark:text-blue-400 font-mono">0</span>
+                             </div>
+                        </div>
+
+                        <!-- New Avg (Left/Center, Green) -->
+                        <div id="marker-new" class="chart-marker absolute left-[38px] right-0 flex items-center transform translate-y-1/2 z-30 opacity-0" style="bottom: 0%;">
+                             <div class="w-4 h-4 bg-green-500 rounded-full -ml-2 shadow-lg ring-2 ring-white dark:ring-slate-800 flex items-center justify-center">
+                                <div class="w-1.5 h-1.5 bg-white rounded-full"></div>
+                             </div>
+                             <div class="w-8 h-[2px] bg-green-500"></div>
+                             <div class="bg-green-100 dark:bg-green-900/40 border border-green-200 dark:border-green-700 px-3 py-1.5 rounded-lg shadow-md flex items-center gap-2 transform origin-left transition-transform hover:scale-105">
+                                <span class="text-[10px] text-green-700 dark:text-green-400 font-bold">물탄 후</span>
+                                <span id="label-new-chart" class="text-sm font-extrabold text-green-600 dark:text-green-400 font-mono">0</span>
+                             </div>
+                        </div>
+                    </div>
+                    <div class="absolute bottom-3 left-7 text-[10px] text-slate-300 select-none">0</div>
+                </div>
+            </div>
+
+            <!-- Inputs -->
+            <div class="p-3 flex flex-col gap-2 pb-10">
+                <div id="tuto-result" class="bg-slate-800 dark:bg-slate-700 rounded-xl p-4 text-white shadow-lg flex-none flex justify-between items-center transition-colors">
+                    <div>
+                        <p class="text-slate-400 text-[10px] mb-0.5">물타기 후 평단가</p>
+                        <div class="flex items-baseline gap-2"><h3 class="text-2xl font-bold text-yellow-400 tracking-tight leading-none" id="res-final-avg">0원</h3></div>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <div class="text-right border-l border-slate-600 pl-4">
+                            <p class="text-[10px] text-slate-400">총 수량 <span id="res-total-qty" class="font-bold text-white ml-1">0주</span></p>
+                            <p class="text-[10px] text-slate-400">총 금액 <span id="res-total-amt" class="font-bold text-white ml-1">0만원</span></p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex flex-col gap-2">
+                    <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+                        <div onclick="toggleMyHoldings()" class="p-3 flex justify-between items-center cursor-pointer bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100"><div class="flex items-center gap-2"><h4 class="text-xs font-bold text-slate-500 dark:text-slate-400"><i class="fa-solid fa-wallet"></i> 내 보유 현황</h4><span id="my-holdings-summary" class="text-[10px] text-slate-600 dark:text-slate-300 font-bold ml-1 opacity-100 transition-opacity">0원 (0주)</span></div><i id="icon-my-holdings-chevron" class="fa-solid fa-chevron-down text-slate-400 text-xs transition-transform duration-300"></i></div>
+                        <div id="my-holdings-body" class="px-3 bg-white dark:bg-slate-800 transition-all duration-300 max-h-0 opacity-0 overflow-hidden">
+                            <div class="pb-3 pt-1">
+                                <div class="mb-3"><label class="block text-[10px] text-slate-400 mb-1">평단가</label><div class="relative"><input type="number" id="inp-my-price" class="w-full bg-slate-50 dark:bg-slate-700 dark:text-white rounded-lg pl-3 pr-8 py-2 font-bold text-lg text-slate-800 outline-none focus:ring-2 focus:ring-slate-200 transition text-right" placeholder="0"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-400 unit-label">원</span></div></div>
+                                <div class="flex items-center justify-between mb-1 px-1"><div class="flex items-center gap-1 border-b-2 border-slate-200 dark:border-slate-600 focus-within:border-slate-400 transition px-1"><input type="number" id="inp-my-qty" class="w-16 text-right font-bold text-xl text-slate-700 dark:text-slate-200 bg-transparent outline-none p-0 m-0" placeholder="0"><span class="text-sm font-bold text-slate-400 dark:text-slate-500 mb-0.5">주</span></div><div class="text-right"><span class="text-[10px] text-slate-400 block mb-0.5">총 보유액</span><span class="font-bold text-lg text-slate-600 dark:text-slate-300" id="txt-my-total">0원</span></div></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm p-3">
+                        <div class="flex justify-between items-center mb-1">
+                            <h4 class="text-xs font-bold text-blue-600 dark:text-blue-400"><i class="fa-solid fa-bolt mr-1"></i>현재가 입력</h4>
+                        </div>
+                        <div class="relative"><input type="number" id="inp-current" class="w-full bg-blue-50 dark:bg-slate-900 rounded-lg pl-3 pr-10 py-2 font-bold text-xl text-slate-800 dark:text-white outline-none text-right focus:ring-2 focus:ring-blue-200 transition" placeholder="0"><span class="absolute right-4 top-1/2 -translate-y-1/2 text-sm text-slate-400 unit-label">원</span></div>
+                    </div>
+
+                    <div class="bg-blue-50 dark:bg-slate-800 dark:border-slate-700 rounded-xl border border-blue-100 p-3 shadow-sm flex flex-col justify-center relative overflow-hidden">
+                        <div class="flex justify-between items-center mb-3"><h4 class="text-xs font-bold text-blue-500 dark:text-blue-400 flex items-center gap-1.5"><i class="fa-solid fa-cart-plus"></i> 추가 매수 설정</h4></div>
+                        <div class="mb-3"><label class="block text-[10px] text-slate-500 dark:text-slate-400 mb-1">매수 희망가</label><div class="relative"><input type="number" id="inp-buy-price" class="w-full bg-white dark:bg-slate-700 dark:text-white rounded-lg pl-3 pr-8 py-2 font-bold text-lg text-blue-700 dark:text-blue-400 outline-none focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-900 transition text-right" placeholder="0"><span class="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-slate-400 unit-label">원</span></div></div>
+                        <div class="relative z-10">
+                            <div class="flex items-center justify-between mb-3 px-1"><div class="flex items-center gap-1 border-b-2 border-blue-200 dark:border-blue-700 focus-within:border-blue-500 transition px-1"><input type="number" id="inp-buy-qty" value="0" class="w-16 text-right font-bold text-xl text-blue-600 dark:text-blue-400 bg-transparent outline-none p-0 m-0"><span class="text-sm font-bold text-blue-400 dark:text-blue-500 mb-0.5">주</span></div><div class="text-right"><span class="text-[10px] text-blue-400 block mb-0.5">필요 금액</span><span class="font-bold text-lg text-slate-700 dark:text-slate-200" id="txt-add-total">0원</span></div></div>
+                            <div class="flex items-center gap-3 pt-2">
+                                <button onclick="adjBuyQty(-1)" class="w-10 h-10 rounded-full bg-white dark:bg-slate-700 text-blue-500 dark:text-blue-400 shadow-sm flex items-center justify-center hover:bg-blue-50 dark:hover:bg-slate-600 active:scale-95 transition flex-none border border-blue-100 dark:border-slate-600"><i class="fa-solid fa-minus"></i></button>
+                                <input type="range" id="slider-buy-qty" min="1" max="100" step="1" value="0" class="flex-1 h-3 bg-blue-200 dark:bg-slate-600 rounded-lg appearance-none cursor-pointer focus:outline-none">
+                                <button onclick="adjBuyQty(1)" class="w-10 h-10 rounded-full bg-white dark:bg-slate-700 text-blue-500 dark:text-blue-400 shadow-sm flex items-center justify-center hover:bg-blue-50 dark:hover:bg-slate-600 active:scale-95 transition flex-none border border-blue-100 dark:border-slate-600"><i class="fa-solid fa-plus"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <nav class="fixed bottom-0 left-0 right-0 glass-nav z-[51] max-w-[480px] mx-auto pb-safe"><div class="flex justify-around items-center h-16 pb-1"><button onclick="switchTab('home')" class="nav-btn active flex flex-col items-center justify-center w-full h-full text-slate-400 transition gap-1"><i class="fa-solid fa-house text-xl"></i><span class="text-[10px]">홈</span></button><button onclick="switchTab('portfolio')" class="nav-btn flex flex-col items-center justify-center w-full h-full text-slate-400 transition gap-1"><i class="fa-solid fa-chart-pie text-xl"></i><span class="text-[10px]">포트폴리오</span></button><button onclick="switchTab('settings')" class="nav-btn flex flex-col items-center justify-center w-full h-full text-slate-400 transition gap-1"><i class="fa-solid fa-gear text-xl"></i><span class="text-[10px]">설정</span></button></div></nav>
+</div>
+
+<script>
+    const STATIC_STOCKS = [
+        { n: "삼성전자", c: "005930", m: "KRW", i: "https://i.namu.wiki/i/G-7l7l4kC5yY7d7bL4.png" },
+        { n: "SK하이닉스", c: "000660", m: "KRW", i: null },
+        { n: "LG에너지솔루션", c: "373220", m: "KRW", i: null },
+        { n: "NAVER", c: "035420", m: "KRW", i: null },
+        { n: "카카오", c: "035720", m: "KRW", i: null },
+        { n: "현대차", c: "005380", m: "KRW", i: null },
+        { n: "대한항공", c: "003490", m: "KRW", i: null },
+        { n: "Tesla", c: "TSLA", m: "USD", i: "https://logo.clearbit.com/tesla.com" },
+        { n: "Apple", c: "AAPL", m: "USD", i: "https://logo.clearbit.com/apple.com" },
+        { n: "Nvidia", c: "NVDA", m: "USD", i: "https://logo.clearbit.com/nvidia.com" },
+        { n: "Microsoft", c: "MSFT", m: "USD", i: "https://logo.clearbit.com/microsoft.com" },
+        { n: "TQQQ", c: "TQQQ", m: "USD", i: null },
+        { n: "Bitcoin", c: "BTC", m: "CRYPTO", i: "https://s2.coinmarketcap.com/static/img/coins/64x64/1.png" },
+        { n: "Ethereum", c: "ETH", m: "CRYPTO", i: "https://s2.coinmarketcap.com/static/img/coins/64x64/1027.png" },
+        { n: "Ripple", c: "XRP", m: "CRYPTO", i: "https://s2.coinmarketcap.com/static/img/coins/64x64/52.png" }
+    ];
+
+    let recentList = JSON.parse(localStorage.getItem('v2_recent') || '[]');
+    let portfolio = JSON.parse(localStorage.getItem('v2_portfolio') || '[]');
+    let currentStock = null;
+    let isDarkMode = localStorage.getItem('theme') === 'dark';
+    let isLargeText = localStorage.getItem('largeText') === 'true'; 
+    let isMyHoldingsOpen = false;
+    let tempInputState = null; 
+    let swipeStartX = 0;
+    let activeSwipeRow = null;
+    let isSwiping = false; 
+    let lastHapticTime = 0;
+
+    // Make functions global
+    window.switchTab = switchTab;
+    window.closeCalculator = closeCalculator;
+    window.saveToPortfolio = saveToPortfolio;
+    window.toggleMyHoldings = toggleMyHoldings;
+    window.adjBuyQty = adjBuyQty;
+    window.toggleDarkMode = toggleDarkMode;
+    window.toggleLargeText = toggleLargeText;
+    window.exportData = exportData;
+    window.openImportModal = () => document.getElementById('modal-import-data').classList.add('open');
+    window.clearRecent = clearRecent;
+    window.closeEditModal = () => document.getElementById('modal-edit-portfolio').classList.remove('open');
+    window.saveEditModal = () => { 
+        if(!editingIndex && editingIndex !== 0) return;
+        const p = Number(document.getElementById('edit-input-price').value);
+        const q = Number(document.getElementById('edit-input-qty').value);
+        if(p && q) {
+            portfolio[editingIndex].myPrice = p;
+            portfolio[editingIndex].myQty = q;
+            localStorage.setItem('v2_portfolio', JSON.stringify(portfolio));
+            renderPortfolioTab();
+            window.closeEditModal();
+        }
+    };
+    window.openDeleteModal = (idx) => { editingIndex = idx; document.getElementById('modal-delete-portfolio').classList.add('open'); };
+    window.closeDeleteModal = () => document.getElementById('modal-delete-portfolio').classList.remove('open');
+    window.confirmDelete = () => { 
+        if(editingIndex !== null) {
+            portfolio.splice(editingIndex, 1);
+            localStorage.setItem('v2_portfolio', JSON.stringify(portfolio));
+            renderPortfolioTab();
+        }
+        window.closeDeleteModal(); 
+    };
+    window.closeInitModal = () => document.getElementById('modal-init-holdings').classList.remove('open');
+    window.confirmInitHoldings = confirmInitHoldings;
+    window.closeImportModal = () => document.getElementById('modal-import-data').classList.remove('open');
+    window.confirmImport = confirmImport;
+    window.deleteCurrentFromPortfolio = (e) => { e?.stopPropagation(); /* Logic */ };
+    
+    // Back navigation logic
+    window.handleBackNavigation = () => {
+        if (checkUnsavedChanges()) {
+            document.getElementById('modal-confirm-save').classList.add('open');
+        } else {
+            closeCalculator();
+        }
+    };
+    
+    window.closeConfirmSaveModal = () => document.getElementById('modal-confirm-save').classList.remove('open');
+    
+    window.confirmDiscardAndExit = () => {
+        // Discarding changes means we don't save to portfolio.
+        // We also clear temp state so re-entry uses clean data.
+        if (currentStock) {
+            // However, tempInputState is used for "resume".
+            // If user says "No", they likely want to revert to last saved.
+            // So we clear the session state.
+            tempInputState = null; 
+        }
+        window.closeConfirmSaveModal();
+        // Use the base closing logic which would normally save temp state, 
+        // but since we cleared it or want to ignore it, we just close visually
+        // and maybe bypass the tempState saving in closeCalculator if we want 'revert' behavior.
+        // But closeCalculator() saves current inputs to tempInputState.
+        // To implement 'discard', we should NOT save current inputs to tempInputState.
+        // We'll modify closeCalculator to accept a flag or handle it manually here.
+        
+        document.getElementById('view-calculator').classList.remove('open');
+        const input = document.getElementById('input-search');
+        if(input && input.value.trim() === '') renderRecentList();
+    };
+    
+    window.confirmSaveAndExit = () => {
+        saveToPortfolio();
+        window.closeConfirmSaveModal();
+        closeCalculator(); // saveToPortfolio updates portfolio, closeCalc will update temp state with new values (sync)
+    };
+
+    // Swipe Handlers
+    window.handleTouchStart = (e, index) => { 
+        swipeStartX = e.touches[0].clientX; 
+        activeSwipeRow = index; 
+        isSwiping = false; 
+    };
+    window.handleTouchMove = (e, index) => {
+        if(activeSwipeRow !== index) return;
+        const diff = e.touches[0].clientX - swipeStartX;
+        const el = document.getElementById(`card-content-${index}`);
+        if(Math.abs(diff) > 5) isSwiping = true;
+        if(Math.abs(diff) > 10) e.preventDefault();
+        // Limit
+        if(diff < -70) el.style.transform = `translateX(${diff}px)`; 
+        else if(diff > 70) el.style.transform = `translateX(${diff}px)`; 
+        else el.style.transform = `translateX(${diff}px)`;
+    };
+    window.handleTouchEnd = (e, index) => {
+        const diff = e.changedTouches[0].clientX - swipeStartX;
+        const el = document.getElementById(`card-content-${index}`);
+        el.style.transition = 'transform 0.2s';
+        if(diff < -100) { window.openDeleteModal(index); el.style.transform = 'translateX(0)'; }
+        else if(diff > 100) { window.openEditModal(index); el.style.transform = 'translateX(0)'; }
+        else { el.style.transform = 'translateX(0)'; }
+        activeSwipeRow = null;
+        setTimeout(() => { isSwiping = false; el.style.transition = ''; }, 200);
+    };
+    window.openEditModal = (idx) => { 
+        editingIndex = idx; 
+        document.getElementById('edit-input-price').value = portfolio[idx].myPrice;
+        document.getElementById('edit-input-qty').value = portfolio[idx].myQty;
+        document.getElementById('modal-edit-portfolio').classList.add('open'); 
+    };
+    window.handleCardClick = (item) => {
+        if(isSwiping) return;
+        openCalculator(item);
+    };
+    
+    let editingIndex = null;
+
+    function init() {
+        if(isDarkMode) document.documentElement.classList.add('dark');
+        if(isLargeText) applyLargeText(true);
+        renderRecentList();
+        
+        const input = document.getElementById('input-search');
+        const clearBtn = document.getElementById('btn-clear-search');
+        
+        input.addEventListener('input', (e) => {
+            const val = e.target.value.trim().toLowerCase();
+            if(val) {
+                clearBtn.classList.remove('hidden');
+                document.getElementById('list-title').innerText = "검색 결과";
+                const filtered = STATIC_STOCKS.filter(s => s.n.toLowerCase().includes(val) || s.c.toLowerCase().includes(val));
+                renderStockList(filtered);
+            } else {
+                clearBtn.classList.add('hidden');
+                document.getElementById('list-title').innerText = "최근 조회";
+                renderRecentList();
+            }
+        });
+
+        clearBtn.addEventListener('click', () => {
+            input.value = '';
+            input.focus();
+            clearBtn.classList.add('hidden');
+            document.getElementById('list-title').innerText = "최근 조회";
+            renderRecentList();
+        });
+
+        ['inp-current', 'inp-my-price', 'inp-my-qty', 'inp-buy-price', 'init-input-price', 'init-input-qty'].forEach(id => {
+            const el = document.getElementById(id);
+            if(el) el.addEventListener('input', calculate);
+        });
+
+        document.getElementById('slider-buy-qty').addEventListener('input', (e) => {
+            document.getElementById('inp-buy-qty').value = e.target.value;
+            calculate();
+        });
+        document.getElementById('inp-buy-qty').addEventListener('input', (e) => {
+            let val = Number(e.target.value);
+            const max = Number(document.getElementById('slider-buy-qty').max);
+            if (val > max) document.getElementById('slider-buy-qty').value = max;
+            else document.getElementById('slider-buy-qty').value = val;
+            calculate();
+        });
+        
+        document.getElementById('inp-current').addEventListener('input', (e) => {
+            updateSliderRange(Number(e.target.value));
+            calculate();
+        });
+    }
+
+    function getAvatarHTML(stock) {
+        if (stock.i) {
+            return `<div class="relative w-10 h-10 flex-none">${getTextAvatar(stock.n)}<img src="${stock.i}" class="absolute inset-0 w-full h-full rounded-full object-contain bg-white" onerror="this.style.display='none'"></div>`;
+        }
+        return getTextAvatar(stock.n);
+    }
+    
+    function getTextAvatar(name) {
+        const char = name.charAt(0).toUpperCase();
+        const colors = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'];
+        const color = colors[name.charCodeAt(0) % colors.length];
+        return `<div class="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm" style="background-color: ${color}">${char}</div>`;
+    }
+
+    function renderStockList(list) {
+        const el = document.getElementById('stock-list'); el.innerHTML = '';
+        if (list.length === 0) { el.innerHTML = '<div class="text-center py-10 text-slate-400 text-xs">검색 결과가 없습니다.</div>'; return; }
+        list.forEach(item => {
+            const div = document.createElement('div');
+            div.className = "flex items-center gap-3 p-3 bg-white dark:bg-slate-800 rounded-xl border border-slate-100 dark:border-slate-700 shadow-sm active:scale-95 transition cursor-pointer";
+            div.onclick = () => openCalculator(item);
+            div.innerHTML = `${getAvatarHTML(item)}<div class="flex-1 min-w-0"><h3 class="font-bold text-slate-800 dark:text-white truncate">${item.n}</h3><div class="flex items-center gap-2"><span class="text-[10px] text-slate-400 bg-slate-100 dark:bg-slate-700 px-1.5 rounded">${item.c}</span><span class="text-[10px] text-slate-400">${item.m}</span></div></div><i class="fa-solid fa-chevron-right text-slate-300 text-xs"></i>`;
+            el.appendChild(div);
+        });
+    }
+    function renderRecentList() {
+        if(recentList.length === 0) document.getElementById('stock-list').innerHTML = '<div class="text-center py-10 text-slate-400 text-xs">최근 조회한 종목이 없습니다.<br>검색하여 추가해보세요.</div>';
+        else renderStockList(recentList);
+    }
+    
+    function resetAllInputs() {
+        ['inp-current', 'inp-my-price', 'inp-my-qty', 'inp-buy-price'].forEach(id => document.getElementById(id).value = '');
+        document.getElementById('inp-buy-qty').value = '0';
+        document.getElementById('slider-buy-qty').value = '0';
+        ['marker-my', 'marker-cur', 'marker-new', 'marker-buy'].forEach(id => {
+            const el = document.getElementById(id);
+            if(el) {
+                el.classList.add('opacity-0');
+                const labelBox = el.querySelector('.label-box');
+                if(labelBox) labelBox.style.transform = 'translateY(0)';
+            }
+        });
+        document.getElementById('track-fill').style.height = '0%';
+        document.getElementById('res-final-avg').innerText = '0원';
+        document.getElementById('res-total-qty').innerText = '0주';
+        document.getElementById('res-total-amt').innerText = '0원';
+        document.getElementById('my-holdings-summary').innerText = '0원 (0주)';
+        document.getElementById('txt-my-total').innerText = '0원';
+        document.getElementById('txt-add-total').innerText = '0원';
+    }
+    
+    // [New] Helper to check for changes
+    function checkUnsavedChanges() {
+        if (!currentStock) return false;
+        // Only check if it's already a saved stock
+        const saved = portfolio.find(p => p.c === currentStock.c);
+        if (!saved) return false;
+
+        const currentCurrentPrice = Number(document.getElementById('inp-current').value);
+        const currentMyPrice = Number(document.getElementById('inp-my-price').value);
+        const currentMyQty = Number(document.getElementById('inp-my-qty').value);
+        const currentBuyPrice = Number(document.getElementById('inp-buy-price').value);
+        const currentBuyQty = Number(document.getElementById('inp-buy-qty').value);
+
+        const savedCurrentPrice = saved.currentPrice || 0; 
+        const savedBuyPrice = saved.buyPrice || 0;
+        const savedBuyQty = saved.buyQty || 0;
+
+        if (currentMyPrice !== saved.myPrice) return true;
+        if (currentMyQty !== saved.myQty) return true;
+        
+        // Treat empty input (0) as same if saved was 0 or undefined.
+        // But if saved was 100 and now empty (0), it is a change.
+        if (currentCurrentPrice !== savedCurrentPrice) return true;
+        
+        if (currentBuyPrice !== savedBuyPrice) return true;
+        if (currentBuyQty !== savedBuyQty) return true;
+
+        return false;
+    }
+
+    function openCalculator(stock) {
+        currentStock = stock;
+        recentList = recentList.filter(s => s.c !== stock.c);
+        recentList.unshift(stock);
+        if(recentList.length > 20) recentList.pop();
+        localStorage.setItem('v2_recent', JSON.stringify(recentList));
+        
+        document.getElementById('view-calculator').classList.add('open');
+        document.getElementById('calc-title').innerText = stock.n;
+        document.getElementById('calc-code').innerText = stock.c;
+        
+        const unit = stock.m === 'USD' ? '$' : (stock.m === 'CRYPTO' ? '' : '원');
+        document.querySelectorAll('.unit-label').forEach(el => el.innerText = unit);
+        document.querySelectorAll('.init-unit-label').forEach(el => el.innerText = unit);
+
+        resetAllInputs();
+
+        // Check Smart Memory (session)
+        if(tempInputState && tempInputState.code === stock.c) {
+             document.getElementById('inp-current').value = tempInputState.curP || '';
+             document.getElementById('inp-my-price').value = tempInputState.myP || '';
+             document.getElementById('inp-my-qty').value = tempInputState.myQ || '';
+             document.getElementById('inp-buy-price').value = tempInputState.buyP || '';
+             document.getElementById('inp-buy-qty').value = tempInputState.buyQ || '0';
+             document.getElementById('slider-buy-qty').value = tempInputState.buyQ || '0';
+             
+             isMyHoldingsOpen = !!(tempInputState.myP || tempInputState.myQ);
+             updateHoldingsUI();
+             calculate();
+             return; 
+        }
+
+        const saved = portfolio.find(p => p.c === stock.c);
+        if(saved) {
+            document.getElementById('inp-my-price').value = saved.myPrice;
+            document.getElementById('inp-my-qty').value = saved.myQty;
+            
+            // [New] Restore Buy Settings & Current Price
+            if (saved.buyPrice) document.getElementById('inp-buy-price').value = saved.buyPrice;
+            if (saved.buyQty) {
+                document.getElementById('inp-buy-qty').value = saved.buyQty;
+                document.getElementById('slider-buy-qty').value = saved.buyQty;
+            }
+            if (saved.currentPrice) document.getElementById('inp-current').value = saved.currentPrice;
+
+            isMyHoldingsOpen = false; 
+            updateHoldingsUI();
+            calculate();
+        } else {
+            isMyHoldingsOpen = false;
+            updateHoldingsUI();
+            openInitModal();
+            calculate();
+        }
+    }
+
+    function closeCalculator() {
+        if(currentStock) {
+            tempInputState = {
+                code: currentStock.c,
+                curP: document.getElementById('inp-current').value,
+                myP: document.getElementById('inp-my-price').value,
+                myQ: document.getElementById('inp-my-qty').value,
+                buyP: document.getElementById('inp-buy-price').value,
+                buyQ: document.getElementById('inp-buy-qty').value
+            };
+        }
+        document.getElementById('view-calculator').classList.remove('open');
+        const input = document.getElementById('input-search');
+        if(input && input.value.trim() === '') renderRecentList();
+    }
+    
+    function switchTab(name) {
+        // Should ideally check for unsaved here too, but simple tab switch usually just hides
+        // If we want safe exit on tab switch, we'd need to intercept this too.
+        // For now, let's just close.
+        closeCalculator(); 
+        document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+        document.getElementById(`tab-${name}`).classList.add('active');
+        document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
+        const btnIndex = name === 'home' ? 0 : name === 'portfolio' ? 1 : 2;
+        document.querySelectorAll('.nav-btn')[btnIndex].classList.add('active');
+        
+        if(name === 'portfolio') renderPortfolioTab();
+    }
+
+    function openInitModal() {
+        document.getElementById('init-input-price').value = '';
+        document.getElementById('init-input-qty').value = '';
+        document.getElementById('modal-init-holdings').classList.add('open');
+    }
+    function closeInitModal() {
+        document.getElementById('modal-init-holdings').classList.remove('open');
+    }
+    
+    function confirmInitHoldings() {
+        const p = document.getElementById('init-input-price').value;
+        const q = document.getElementById('init-input-qty').value;
+        closeInitModal();
+        if(p && q) {
+            document.getElementById('inp-my-price').value = p;
+            document.getElementById('inp-my-qty').value = q;
+            isMyHoldingsOpen = false; 
+            updateHoldingsUI();
+            calculate(); 
+        }
+    }
+
+    function toggleMyHoldings() { isMyHoldingsOpen = !isMyHoldingsOpen; updateHoldingsUI(); }
+    function updateHoldingsUI() {
+        const c = document.getElementById('my-holdings-body'), i = document.getElementById('icon-my-holdings-chevron'), s = document.getElementById('my-holdings-summary');
+        if (isMyHoldingsOpen) { c.classList.remove('max-h-0', 'opacity-0'); c.classList.add('max-h-[300px]', 'opacity-100'); i.classList.add('rotate-180'); s.classList.add('opacity-0'); } 
+        else { c.classList.add('max-h-0', 'opacity-0'); c.classList.remove('max-h-[300px]', 'opacity-100'); i.classList.remove('rotate-180'); s.classList.remove('opacity-0'); }
+    }
+
+    function updateSliderRange(price) {
+        const slider = document.getElementById('slider-buy-qty');
+        let maxQty = 500;
+        const isUsd = currentStock?.m === 'USD';
+        if (isUsd) { if (price < 10) maxQty = 1000; else if (price < 100) maxQty = 500; else maxQty = 100; } 
+        else { if (price < 5000) maxQty = 10000; else if (price < 20000) maxQty = 5000; else if (price < 100000) maxQty = 1000; else if (price < 500000) maxQty = 500; else maxQty = 100; }
+        slider.max = maxQty;
+    }
+
+    function adjBuyQty(d) {
+        const s = document.getElementById('slider-buy-qty'), t = document.getElementById('inp-buy-qty');
+        const max = Number(s.max);
+        let n = Number(t.value) + d; if(n < 0) n = 0; if(n > max) n = max; 
+        s.value = n; t.value = n; calculate();
+        if(navigator.vibrate) navigator.vibrate(5);
+    }
+
+    function calculate() {
+        if(document.getElementById('modal-init-holdings').classList.contains('open')) return;
+
+        const curP = Number(document.getElementById('inp-current').value) || 0;
+        const myP = Number(document.getElementById('inp-my-price').value) || 0;
+        const myQ = Number(document.getElementById('inp-my-qty').value) || 0;
+        const buyP = Number(document.getElementById('inp-buy-price').value) || 0;
+        const buyQ = Number(document.getElementById('inp-buy-qty').value) || 0;
+
+        const totalQ = myQ + buyQ;
+        const addAmt = buyP * buyQ;
+        const totalAmt = (myP * myQ) + addAmt;
+        const newAvg = totalQ > 0 ? totalAmt / totalQ : 0;
+
+        const unit = currentStock?.m === 'USD' ? '$' : '원';
+        const format = (n) => currentStock?.m === 'USD' ? n.toFixed(2) : Math.floor(n).toLocaleString();
+        const formatAmt = (n) => currentStock?.m === 'USD' ? n.toFixed(2) : (n > 10000 ? Math.floor(n/10000).toLocaleString() + '만' : Math.floor(n).toLocaleString());
+
+        document.getElementById('res-total-qty').innerText = totalQ.toLocaleString() + "주";
+        document.getElementById('res-total-amt').innerText = formatAmt(totalAmt) + unit;
+        document.getElementById('res-final-avg').innerText = format(newAvg) + unit;
+        
+        document.getElementById('my-holdings-summary').innerText = `${format(myP)}${unit} (${myQ}주)`;
+        document.getElementById('txt-my-total').innerText = formatAmt(myP * myQ) + unit;
+        document.getElementById('txt-add-total').innerText = formatAmt(addAmt) + unit;
+
+        updateBarChart(myP, curP, newAvg, buyP);
+    }
+
+    function updateBarChart(myP, curP, newAvg, buyP) {
+        const markers = [
+            { id: 'marker-my', val: myP, type: 'my' },
+            { id: 'marker-cur', val: curP, type: 'cur' },
+            { id: 'marker-buy', val: buyP, type: 'buy' },
+            { id: 'marker-new', val: newAvg, type: 'new' }
+        ].filter(m => m.val > 0);
+        
+        ['marker-my', 'marker-cur', 'marker-new', 'marker-buy'].forEach(id => {
+            const el = document.getElementById(id);
+            if(el) {
+                if (!markers.find(m => m.id === id)) el.classList.add('opacity-0');
+            }
+        });
+
+        if (markers.length === 0) {
+            document.getElementById('track-fill').style.height = '0%';
+            return;
+        }
+
+        const values = markers.map(m => m.val);
+        const max = Math.max(...values) * 1.2 || 100;
+
+        if(curP > 0) {
+             const fillPct = Math.min((curP / max) * 100, 100);
+             document.getElementById('track-fill').style.height = fillPct + '%';
+        } else {
+             document.getElementById('track-fill').style.height = '0%';
+        }
+
+        markers.forEach(m => {
+            let pct = (m.val / max) * 100;
+            if(pct > 95) pct = 95; 
+            m.pct = pct;
+        });
+
+        // Smart Collision Logic (Label Only)
+        // Sort by pct for processing
+        const rightMarkers = markers.filter(m => m.type !== 'new').sort((a, b) => a.pct - b.pct);
+        const MIN_GAP = 12; // Gap for labels
+        
+        // Init visualPct
+        rightMarkers.forEach(m => m.visualPct = m.pct);
+        
+        // Spread Up
+        for (let i = 0; i < rightMarkers.length - 1; i++) {
+            if (rightMarkers[i+1].visualPct - rightMarkers[i].visualPct < MIN_GAP) {
+                rightMarkers[i+1].visualPct = rightMarkers[i].visualPct + MIN_GAP;
+            }
+        }
+        // Clamp Top & Push Down
+        for (let i = rightMarkers.length - 1; i >= 0; i--) {
+            if (rightMarkers[i].visualPct > 95) {
+                rightMarkers[i].visualPct = 95;
+                if (i > 0 && rightMarkers[i].visualPct - rightMarkers[i-1].visualPct < MIN_GAP) {
+                     rightMarkers[i-1].visualPct = rightMarkers[i].visualPct - MIN_GAP;
+                }
+            }
+        }
+
+        // Apply
+        markers.forEach(m => {
+            const el = document.getElementById(m.id);
+            if(el) {
+                // Line position -> Exact Pct
+                el.style.bottom = m.pct + '%';
+                el.classList.remove('opacity-0');
+                
+                const labelBox = el.querySelector('.label-box');
+                const label = el.querySelector('span[id^="label-"]');
+                const unit = currentStock?.m === 'USD' ? '$' : '원';
+                const fmt = currentStock?.m === 'USD' ? m.val.toFixed(2) : Math.floor(m.val).toLocaleString();
+                
+                if(label) label.innerText = fmt + unit;
+
+                // Adjust Label Box Only
+                if (m.type !== 'new') {
+                     const mObj = rightMarkers.find(rm => rm.id === m.id);
+                     if(mObj) {
+                         const diff = mObj.visualPct - m.pct; // positive means label is higher
+                         // Convert % diff to pixels (approx based on height, say 2.5px per %)
+                         const px = -(diff * 2.5); // Negative translate moves UP
+                         if(labelBox) labelBox.style.transform = `translateY(${px}px)`;
+                     }
+                } else {
+                     // New marker is left side, no shift
+                     if(labelBox) labelBox.style.transform = 'translateY(0)';
+                }
+            }
+        });
+    }
+
+    function saveToPortfolio() {
+        if(!currentStock) return;
+        const myP = Number(document.getElementById('inp-my-price').value);
+        const myQ = Number(document.getElementById('inp-my-qty').value);
+        if(!myP || !myQ) { showToast("평단가와 수량을 입력해주세요"); return; }
+        
+        // [New] Store current price & Buy Settings
+        const curP = Number(document.getElementById('inp-current').value) || 0;
+        const buyP = Number(document.getElementById('inp-buy-price').value) || 0;
+        const buyQ = Number(document.getElementById('inp-buy-qty').value) || 0;
+
+        portfolio = portfolio.filter(p => p.c !== currentStock.c);
+        
+        portfolio.push({ 
+            ...currentStock, 
+            myPrice: myP, 
+            myQty: myQ, 
+            currentPrice: curP,
+            buyPrice: buyP,
+            buyQty: buyQ
+        });
+        
+        localStorage.setItem('v2_portfolio', JSON.stringify(portfolio));
+        showToast("포트폴리오에 저장됨");
+    }
+
+    // --- UTILS ---
+    function showToast(msg) {
+        const t = document.getElementById('toast-container');
+        document.getElementById('toast-msg').innerText = msg;
+        t.classList.remove('opacity-0');
+        setTimeout(() => t.classList.add('opacity-0'), 2000);
+    }
+    function toggleDarkMode() {
+        document.documentElement.classList.toggle('dark');
+        localStorage.setItem('theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light');
+    }
+
+    function toggleLargeText() {
+        isLargeText = !isLargeText;
+        applyLargeText(isLargeText);
+        localStorage.setItem('largeText', isLargeText);
+    }
+
+    function applyLargeText(enable) {
+        const h = document.documentElement;
+        const btn = document.getElementById('btn-text-toggle');
+        const knob = document.getElementById('knob-text-toggle');
+        
+        if (enable) {
+            h.classList.add('large-text');
+            if(btn) {
+                btn.classList.remove('bg-slate-200', 'dark:bg-slate-600');
+                btn.classList.add('bg-blue-600', 'dark:bg-blue-600');
+            }
+            if(knob) knob.classList.add('translate-x-4');
+        } else {
+            h.classList.remove('large-text');
+            if(btn) {
+                btn.classList.add('bg-slate-200', 'dark:bg-slate-600');
+                btn.classList.remove('bg-blue-600', 'dark:bg-blue-600');
+            }
+            if(knob) knob.classList.remove('translate-x-4');
+        }
+    }
+
+    function clearRecent() { if(confirm('기록 삭제?')) { recentList = []; localStorage.setItem('v2_recent', '[]'); renderRecentList(); } }
+    
+    function exportData() {
+        const dataStr = JSON.stringify(portfolio);
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(dataStr).then(() => showToast("데이터가 복사되었습니다"), () => fallbackCopyTextToClipboard(dataStr));
+        } else {
+            fallbackCopyTextToClipboard(dataStr);
+        }
+    }
+
+    function fallbackCopyTextToClipboard(text) {
+        var textArea = document.createElement("textarea"); textArea.value = text;
+        textArea.style.position = "fixed"; document.body.appendChild(textArea);
+        textArea.focus(); textArea.select();
+        try { document.execCommand('copy'); showToast("데이터가 복사되었습니다"); } catch (err) {}
+        document.body.removeChild(textArea);
+    }
+
+    function confirmImport() {
+        const val = document.getElementById('import-input-text').value;
+        if (!val.trim()) return;
+        try {
+            const parsed = JSON.parse(val);
+            if (Array.isArray(parsed)) {
+                portfolio = parsed;
+                localStorage.setItem('v2_portfolio', JSON.stringify(portfolio));
+                renderPortfolioTab();
+                window.closeImportModal();
+                showToast("데이터 복구 완료");
+            } else {
+                alert("잘못된 데이터 형식입니다.");
+            }
+        } catch (e) { alert("데이터 오류"); }
+    }
+
+    function renderPortfolioTab() {
+        const el = document.getElementById('pf-list'); 
+        const empty = document.getElementById('pf-empty'); 
+        const card = document.getElementById('pf-summary-card');
+        el.innerHTML = '';
+        
+        if(portfolio.length === 0) { 
+            empty.classList.remove('hidden'); 
+            card.classList.add('hidden');
+            return; 
+        } 
+        empty.classList.add('hidden');
+        card.classList.remove('hidden');
+
+        // Total Calc
+        let totalInvest = 0;
+
+        portfolio.forEach((item, index) => {
+            const invest = item.myPrice * item.myQty;
+            totalInvest += invest;
+
+            const div = document.createElement('div'); 
+            div.className = `relative overflow-hidden rounded-2xl mb-3 shadow-md border border-slate-100 dark:border-slate-700 select-none h-[102px] group-row transition-all bg-white dark:bg-slate-800`;
+            div.id = `pf-row-${index}`;
+            
+            const unit = item.m === 'USD' ? '$' : '원';
+            const fmt = (n) => item.m === 'USD' ? n.toFixed(2) : n.toLocaleString();
+            
+             div.innerHTML = `
+                <div class="absolute left-0 top-0 bottom-0 w-[70px] bg-blue-500 flex items-center justify-center text-white z-0 rounded-l-2xl" onclick="window.openEditModal(${index}); event.stopPropagation();">
+                    <div class="flex flex-col items-center"><i class="fa-solid fa-pen text-lg mb-1"></i><span class="text-[10px] font-bold">수정</span></div>
+                </div>
+                <div class="absolute right-0 top-0 bottom-0 w-[70px] bg-red-500 flex items-center justify-center text-white z-0 rounded-r-2xl" onclick="window.openDeleteModal(${index}); event.stopPropagation();" style="right:0;">
+                    <div class="flex flex-col items-center"><i class="fa-solid fa-trash text-lg mb-1"></i><span class="text-[10px] font-bold">삭제</span></div>
+                </div>
+                <div id="card-content-${index}" class="relative h-full bg-white dark:bg-slate-800 px-5 flex items-center justify-between z-10 transition-transform duration-200"
+                     style="transform: translateX(0px);"
+                     ontouchstart="handleTouchStart(event, ${index})" 
+                     ontouchmove="handleTouchMove(event, ${index})" 
+                     ontouchend="handleTouchEnd(event, ${index})"
+                     onclick="handleCardClick(portfolio[${index}])">
+                     
+                    <div class="flex items-center gap-3">
+                        ${getAvatarHTML(item)}
+                        <div>
+                            <h3 class="font-bold text-slate-800 dark:text-white">${item.n}</h3>
+                            <div class="flex items-center gap-1.5 mt-0.5">
+                                <span class="text-xs text-slate-400">${item.myQty}주</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <p class="font-bold text-slate-800 dark:text-white text-lg">${fmt(invest)}${unit}</p>
+                        <p class="text-[11px] text-slate-400 mt-1">
+                            <span>평균단가 ${fmt(item.myPrice)}${unit}</span>
+                        </p>
+                    </div>
+                </div>
+            `;
+            
+            el.appendChild(div);
+        });
+
+        document.getElementById('pf-total-invest').innerText = Math.floor(totalInvest).toLocaleString();
+        document.getElementById('pf-count').innerText = portfolio.length;
+    }
+
+    // Fix card click handler to accept object not index
+    window.handleCardClick = (item) => {
+        // Check if swiping
+        if(isSwiping) return;
+        openCalculator(item);
+    };
+
+    // Correct swipe logic for new structure
+    window.handleTouchMove = (e, index) => {
+        if(activeSwipeRow !== index) return;
+        const diff = e.touches[0].clientX - swipeStartX;
+        const el = document.getElementById(`card-content-${index}`);
+        if(Math.abs(diff) > 5) isSwiping = true;
+        if(Math.abs(diff) > 10) e.preventDefault();
+        // Limit
+        if(diff < -70) el.style.transform = `translateX(${diff}px)`; // Left (Delete)
+        else if(diff > 70) el.style.transform = `translateX(${diff}px)`; // Right (Edit)
+        else el.style.transform = `translateX(${diff}px)`;
+    };
+    
+    window.handleTouchEnd = (e, index) => {
+        const diff = e.changedTouches[0].clientX - swipeStartX;
+        const el = document.getElementById(`card-content-${index}`);
+        
+        if (diff < -100) { 
+            // Trigger Delete
+            if(navigator.vibrate) navigator.vibrate(10); 
+            setTimeout(() => {
+                el.style.transform = 'translateX(0)';
+                window.openDeleteModal(index);
+            }, 100);
+        } else if (diff > 100) { 
+            // Trigger Edit
+            if(navigator.vibrate) navigator.vibrate(10); 
+            setTimeout(() => {
+                el.style.transform = 'translateX(0)';
+                window.openEditModal(index);
+            }, 100);
+        } else {
+            el.style.transform = 'translateX(0)';
+        }
+        activeSwipeRow = null;
+        isSwiping = false;
+    };
+
+    init();
+</script>
+
+</body>
+</html>
